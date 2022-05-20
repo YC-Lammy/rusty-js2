@@ -1,0 +1,34 @@
+[package]
+name = "rusty-js2"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cranelift = "0.81"
+cranelift-jit="*"
+cranelift-module="*"
+
+lazy_static="*"
+rand = "*"
+bytes= "*"
+
+parking_lot = "0.11.2"
+lock_api = "0.4.5"
+
+crossbeam = "*"
+
+# swc_ecma_codegen="0.84.0"
+swc_ecma_transforms_base="0.49.1"
+swc_ecma_parser="0.82.0"
+swc_common = "*"
+swc_ecma_ast = "*"
+
+rustc-hash = "*"
+
+string-interner = "*"
+
+tokio = {version = "*", features=["rt"]}
+futures = "*"
+async-recursion = "*"
