@@ -3,13 +3,14 @@
 
 use std::sync::Arc;
 
+use crate::utils::ToMutable;
 use crate::{value::JValue, vm::VmContext};
 use crate::operator;
 
 
 use super::object::{
     JObject,
-    JObjectInner
+    JObjectInner, JObjectInnerEnum
 };
 use super::function::Function;
 
@@ -18,78 +19,52 @@ pub struct Array{
 }
 
 impl Array{
-    pub fn new(values:&[JValue]) -> Arc<dyn JObjectInner>{
-        return Arc::new(Array{
+    pub fn new(object:&'static mut JObject, values:&[JValue]) -> JValue{
+        object.inner = JObjectInnerEnum::Array(Array{
             values:values.to_vec()
-        })
+        });
+
+        JValue::Object(object)
     }
 
-    pub unsafe fn new_raw(argv:*mut JValue, argc:i64, spread:bool) -> Arc<dyn JObjectInner>{
+    pub unsafe fn new_raw(object:&'static mut JObject, argv:*mut JValue, argc:i64, spread:bool) -> JValue{
         let mut args = std::mem::transmute::<_, &[JValue]>((argv, argc as usize));
         if spread{
             let mut v = args.to_vec();
             v.extend(operator::IteratorCollect(args[args.len() -1]));
-            return Self::new(&v)
+            return Self::new(object, &v)
         };
-        Self::new(args)
+
+        Self::new(object, args)
     }
     
-    fn constructor(vmctx:&mut VmContext, this:JValue, args:&[JValue]) -> JValue{
-        JValue::Undefined
-    }
-}
-
-impl JObjectInner for Array{
-    fn set(&mut self, name:&str, value:JValue) -> bool {
-        if let Ok(mut i) = name.parse::<i64>(){
-            if i < 0{
-                i = self.values.len() as i64 - i;
+    pub fn set(&self, key:&str, value:JValue) -> bool{
+        if let Ok(mut v) = key.parse::<i64>(){
+            if v < 0{
+                v = v + self.values.len() as i64;
             }
-
-            if i < 0{
+            if v < 0{
                 return false
             }
 
-            if i as usize >= self.values.len(){
-                self.values.resize(i as usize +1, JValue::Undefined);
+            if self.values.len() < v as usize{
+                self.to_mut().values.resize(v as usize+1, JValue::Undefined);
             }
-            self.values[i as usize] = value;
+            self.values.to_mut()[v as usize] = value;
             return true
-        } else{
-            return false
         }
+        return false
     }
 
-    fn get(&mut self, name:&str) -> Option<JValue> {
-        if let Ok(mut i) = name.parse::<i64>(){
-            if i < 0{
-                i = self.values.len() as i64 - i;
-            }
-            if i < 0{
-                return None
-            }
 
-            if i as usize >= self.values.len(){
-                self.values.resize(i as usize +1, JValue::Undefined);
-            }
-            return Some(self.values[i as usize])
-        } else{
-            return None
-        }
+    fn constructor(this:JValue, args:&[JValue]) -> Vec<JValue>{
+        Vec::new()
     }
-}
 
-pub unsafe fn init(ctx:&mut VmContext, global:&'static mut JObject){
 
-    let constructor = JObject::fromInner(Function::native(Array::constructor));
-    let proto = JObject::new();
-
-    global.builtin_member("Array", std::ptr::read(&constructor));
-    constructor.builtin_member("prototype", proto);
-
-    constructor.builtin_member("from", |vmctx:&mut VmContext, this, args:&[JValue]|{
+    fn from_(this:JValue, args:&[JValue]) -> Vec<JValue>{
         if args.len() == 0{
-            operator::throw(super::error::Error::newTypeError("Array.from expected at least one argument.").into())
+            operator::throw(super::Error::newTypeError("Array.from expected at least one argument.").into())
         }
         let mut values = operator::IteratorCollect(args[0]);
 
@@ -108,21 +83,63 @@ pub unsafe fn init(ctx:&mut VmContext, global:&'static mut JObject){
             }).collect::<Vec<JValue>>();
         }
 
-        return JObject::fromInner(Arc::new(Array{
-            values
-        })).into()
-    });
+        return values
+    }
 
-    constructor.builtin_member("isArray", |vmctx:&mut VmContext, this, args:&[JValue]|{
-        if args.len() > 0{
-            if let Some(o) = args[0].object(){
-                if let Some(inner) = &o.inner{
-                    return JValue::Boolean(inner.is_array())
-                }
+    fn is_array(this:JValue, arr:Option<JValue>) -> bool{
+        if let Some(v) = arr{
+            if let Some(o) = v.object(){
+                return o.inner.is_array()
             }
         }
-        JValue::Boolean(false)
-    });
+        false
+    }
 
-    
+    fn of(this:JValue, args:&[JValue]) -> Vec<JValue>{
+        args.to_vec()
+    }
+
+
+    fn at(this:Option<&mut Self>, mut idx:i32) -> JValue{
+        let this  = check_self(this, "at");
+        if idx < 0{
+            idx = idx + this.values.len() as i32
+        }
+
+        if idx < 0{
+            return JValue::Undefined
+        }
+
+        if idx < this.values.len() as i32{
+            return this.values[idx as usize]
+        }
+        JValue::Undefined
+    }
+
+
+
+
+}
+
+fn check_self<'a>(this:Option<&'a mut Array>, name:&'static str) -> &'a mut Array{
+    if let Some(v) = this{
+        return v
+    }
+    operator::throw(super::Error::newTypeError(format!("Array.prototype.{}: require this to be array.", name)))
+}
+
+pub unsafe fn init(ctx:&mut VmContext, global:&'static mut JObject){
+
+    let constructor = Function::native(Array::constructor).object().unwrap();
+    let proto = JObject::new();
+
+    global.builtin_member("Array", std::ptr::read(&constructor));
+    constructor.builtin_member("prototype", JValue::Object(proto));
+
+    constructor.builtin_member("from", Function::native(Array::from_));
+    constructor.builtin_member("isArray", Function::native(Array::is_array));
+    constructor.builtin_member("of", Function::native(Array::of));
+
+    proto.builtin_member("length", 0i32);
+    proto.builtin_member("at", Function::native(Array::at));
 }

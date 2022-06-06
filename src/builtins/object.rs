@@ -62,7 +62,7 @@ pub struct JObject{
     freezed:bool,
     extendable:bool,
 
-    pub(crate) inner:Option<Arc<dyn JObjectInner>>
+    pub(crate) inner:JObjectInnerEnum
 }
 
 impl RefUnwindSafe for JObject{}
@@ -82,7 +82,7 @@ impl JObject{
 
             freezed: false, 
             extendable: true, 
-            inner: None
+            inner: JObjectInnerEnum::None
         };
         ptr
     }
@@ -97,28 +97,9 @@ impl JObject{
 
             freezed: false, 
             extendable: true, 
-            inner: None
+            inner: JObjectInnerEnum::None
         };
         return JValue::Object(ptr)
-    }
-
-    /// determine the prototype of object
-    pub fn fromInner(inner:Arc<dyn JObjectInner>) -> &'static mut JObject{
-        let ptr = heap::malloc::<Self>();
-
-        *ptr = JObject{ 
-            prototype: resolve_prototype(inner.type_id()), 
-            values:HashMap::default(),
-
-            freezed: false, 
-            extendable: true, 
-            inner: Some(inner)
-        };
-        return ptr
-    }
-
-    pub fn inner_ref_uncheck(&self) -> &Arc<dyn JObjectInner>{
-        self.inner.as_ref().unwrap()
     }
 
     pub fn member_str(&mut self, name:&str) -> JValue{
@@ -126,25 +107,25 @@ impl JObject{
     }
 
     pub fn set_member_str<T>(&mut self, name:&str, value:T) where T:Into<JValue>{
+
         let value = value.into();
-        if let Some(iner) = &self.inner{
-            if !iner.borrow_mut().set(name, value){
-                self.values.insert(name.to_string(), value);
-            }
-        } else{
+
+        if !self.inner.set(name, value){
             self.values.insert(name.to_string(), value);
         }
     }
 
     pub(crate) fn builtin_member<T>(&mut self, name:&str, value:T) where T:Into<JValue>{
+
         let value = value.into();
-        if let Some(iner) = &self.inner{
-            if !iner.borrow_mut().set(name, value){
-                self.values.insert(name.to_string(), value);
-            }
-        } else{
+
+        if !self.inner.set(name, value){
             self.values.insert(name.to_string(), value);
         }
+    }
+
+    pub(crate) fn keep_alive(&self, alive:bool){
+
     }
 }
 
@@ -153,14 +134,115 @@ impl Hash for JObject{
         state.write_usize(self.prototype as usize);
         state.write_u8(self.extendable as u8);
         state.write_u8(self.freezed as u8);
-        state.write_u8(self.inner.is_some() as u8);
-        if let Some(i) = &self.inner{
-            state.write_usize(i.as_ref() as *const _ as *mut u8 as usize);
-        } else{
-            state.write_usize(0);
-        }
+        state.write_u8(self.inner.varient() as u8);
         state.write_usize(self.values.len());
         state.write_usize(self.values.capacity());
         state.write_usize(self as *const Self as usize);
+    }
+}
+
+pub(crate) enum JObjectInnerEnum{
+    None,
+
+    Array(Array),
+    Function(Function),
+    Error(Error),
+    Date(),
+    RegExp(),
+
+    Map(),
+    Set(),
+    WeakMap(),
+    WeakSet(),
+
+    ArrayBuffer(),
+    SharedArrayBuffer(),
+    DataView(),
+
+    Promise(Promise),
+    Generator(),
+
+    Proxy(),
+
+    TypedArray(),
+    
+    Boolean(bool),
+    Number(f64),
+    BigInt(i64),
+    Symbol(Symbol),
+    String(JString),
+
+    Custom(Arc<dyn JObjectInner>)
+}
+
+impl JObjectInnerEnum{
+
+    pub fn varient(&self) -> u8{
+        match self{
+            Self::None => 0,
+            Self::Array(_) => 1,
+            Self::ArrayBuffer() => 2,
+            Self::BigInt(_) => 3,
+            Self::Boolean(_) => 4,
+            Self::Custom(_) => 5,
+            Self::DataView() => 6,
+            Self::Date() => 7,
+            Self::Error(_) => 8,
+            Self::Function(_) => 9,
+            Self::Generator() => 10,
+            Self::Map() => 11,
+            Self::Number(_) => 12,
+            Self::Promise(_) => 13,
+            Self::Proxy() => 14,
+            Self::RegExp() => 15,
+            Self::Set() => 16,
+            Self::SharedArrayBuffer() => 17,
+            Self::String(_) => 18,
+            Self::Symbol(_) => 19,
+            Self::WeakMap() => 20,
+            Self::WeakSet() => 21,
+            Self::TypedArray() => 22
+        }
+    }
+
+    pub fn is_array(&self) -> bool{
+        match self{
+            Self::Array(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn is_function(&self) -> bool{
+        match self{
+            Self::Function(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn array(&self) -> Option<&Array>{
+        match self{
+            Self::Array(a) => Some(a),
+            _ => None
+        }
+    }
+
+    pub fn function(&self) -> Option<&Function>{
+        match self{
+            Self::Function(f) => Some(f),
+            _ => None
+        }
+    }
+
+    pub fn set(&self, key:&str, value:JValue) -> bool{
+        match self{
+            Self::Array(a) => a.set(key, value),
+            Self::Proxy() => todo!(),
+            Self::TypedArray() => todo!(),
+            _ => false
+        }
+    }
+
+    pub fn call(&self, ctx:&'static VmContext, this:JValue, args:&[JValue]) -> JValue{
+        todo!()
     }
 }

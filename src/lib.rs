@@ -1,14 +1,11 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
-}
+#![feature(unboxed_closures)]
+#![feature(fn_traits)]
+
+use std::{marker, borrow::Borrow};
+use std::ops::Deref;
 
 mod jit;
-mod interpretor;
+//mod interpretor;
 mod operator;
 mod value;
 mod builtins;
@@ -17,5 +14,15 @@ mod string_allocator;
 
 pub mod runtime;
 mod vm;
-mod util;
 mod error;
+mod garbage_collector;
+mod parse;
+mod module;
+
+mod bindgen;
+
+mod utils;
+mod allocator;
+
+pub mod prelude;
+

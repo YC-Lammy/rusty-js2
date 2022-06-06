@@ -23,11 +23,10 @@ pub enum DataMarker{
     NotUse
 }
 
-pub enum ObjectOrString{
-    Object,
-    String
+#[repr(C)]
+pub struct MarkedObject{
+    
 }
-
 pub fn malloc<T>() -> &'static mut T{
     unsafe{RUNTIME.with(|runtime|{
         runtime.to_mut().allocator.alloc(Layout::new::<T>()) as *mut T

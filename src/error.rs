@@ -1,4 +1,6 @@
-use std::fmt::{Debug, Display, Write};
+use std::{fmt::{Debug, Display, Write}, sync::Arc};
+
+use cranelift::codegen::CodegenError;
 
 use crate::value::JValue;
 
@@ -17,6 +19,10 @@ pub enum Error{
 
     Deprecated(&'static str),
     Unimplemented(&'static str),
+
+    CodegenError(Arc<CodegenError>),
+
+    ParseError(swc_ecma_parser::error::Error),
 
     Value(JValue),
 }
@@ -46,6 +52,8 @@ impl Display for Error{
             Error::IllegalContinueStatment => f.write_str("Illegal continue statment."),
             Error::Deprecated(s) => f.write_fmt(format_args!("Deprecated: {}", s)),
             Error::Unimplemented(s) => f.write_fmt(format_args!("Unimplemented: {}", s)),
+            Error::CodegenError(c) => Display::fmt(c, f),
+            Error::ParseError(p) => Display::fmt(&p.kind().msg(), f),
             Error::Value(v) => f.write_str(v.to_string().as_str()),
         }
     }

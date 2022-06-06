@@ -2,23 +2,10 @@ use std::sync::Arc;
 
 use crate::value::JValue;
 
-use super::object::{JObjectInner, JObject};
+use super::object::{JObjectInner, JObject, JObjectInnerEnum};
 
 pub trait Named {
     fn name(&self) -> &str;
-}
-
-impl<E> JObjectInner for E where E:std::error::Error + Named + Sync + Send + 'static{
-    fn get(&mut self, name:&str) -> Option<crate::value::JValue> {
-        
-        if name == "message" {
-            return Some(self.to_string().into())
-        }
-        if name == "name" {
-            return Some(self.name().into())
-        }
-        None
-    }
 }
 
 pub struct Error{
@@ -28,14 +15,11 @@ pub struct Error{
 
 impl Error{
     pub fn newTypeError<S>(message:S) -> JValue where S:Into<String>{
-        let inner = Arc::new(Error{
+        let obj = JObject::new();
+        obj.inner = JObjectInnerEnum::Error(Error{
             name:"TypeError".into(),
             message:message.into()
         });
-        JObject::fromInner(inner).into()
+        JValue::Object(obj)
     }
-}
-
-impl JObjectInner for Error{
-
 }

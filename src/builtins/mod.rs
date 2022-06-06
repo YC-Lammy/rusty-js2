@@ -6,6 +6,11 @@ pub mod function;
 pub mod promise;
 pub mod array;
 pub mod error;
+pub mod regexp;
+pub mod typedarray;
+pub mod generator;
+
+pub mod dynamic_object;
 
 pub use object::{
     JObject, JObjectInner

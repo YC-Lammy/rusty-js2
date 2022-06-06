@@ -34,6 +34,15 @@ impl Symbol{
             intern
         })
     }
+
+    pub fn new_private(s:&str) -> JValue{
+        let i = unsafe{(INTERNER.deref() as *const _ as *mut StringInterner).as_mut().unwrap()};
+        let intern = i.get_or_intern(s);
+        return JValue::Symbol(Symbol{
+            id:0,
+            intern
+        })
+    }
 }
 
 impl Deref for Symbol{

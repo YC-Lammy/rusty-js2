@@ -5,7 +5,7 @@ use rustc_hash::FxHashMap;
 use crate::operator;
 use crate::runtime::Runtime;
 use crate::value::JValue;
-use crate::util::{
+use crate::utils::{
     BuildNoHasher,
     NoHasher
 };
@@ -22,19 +22,34 @@ pub enum Variable{
 pub struct VmContext{
     pub(crate) runtime:&'static mut Runtime,
     pub(crate) parent:Option<&'static mut VmContext>,
+    pub(crate) childs:Vec<&'static mut Self>,
     pub(crate) variables:HashMap<u64, Variable, BuildNoHasher>,
 
     pub(crate) captures:Option<Arc< HashMap<u64, Arc<JValue>, BuildNoHasher> >>
 }
 
 impl VmContext{
+    pub fn new() -> Self{
+        Self { 
+            runtime: unsafe{std::mem::transmute(0usize)}, 
+            childs:Vec::new(),
+            parent: None, 
+            variables: HashMap::default(), 
+            captures: None
+        }
+    }
+
     pub fn new_child(&mut self) -> &'static mut Self{
-        Box::leak(Box::new(Self{
-            runtime:unsafe{std::mem::transmute_copy(&self.runtime)},
-            parent:Some(unsafe{std::mem::transmute(self)}),
+        
+        let c = Box::leak(Box::new(Self{
+            runtime:unsafe{std::ptr::read(&self.runtime)},
+            childs:Vec::new(),
+            parent:Some(unsafe{std::mem::transmute(std::ptr::read(&self))}),
             variables:Default::default(),
             captures:None,
-        }))
+        }));
+        self.childs.push(unsafe{std::ptr::read(&c)});
+        c
     }
 
     pub fn done(&mut self){

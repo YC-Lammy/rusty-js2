@@ -93,6 +93,13 @@ impl JValue{
         }
     }
 
+    pub fn bool(&self) -> Option<bool>{
+        match *self{
+            Self::Boolean(b) => Some(b),
+            _ => None
+        }
+    }
+
     pub fn is_null(&self) -> bool{
         match self{
             Self::Null => true,
@@ -144,13 +151,16 @@ impl JValue{
     
     
     /// keep the value alive, preventing it being GC
+    /// this is useful when storing Objects outside the runtime.
     /// 
-    /// user must call this method before 
-    /// storing Objects outside the runtime.
+    /// users should use the `toOwned` function instead.
     pub fn keep_alive(&self, b:bool){
         if let JValue::Object(o) = *self{
-            todo!()
+            
+        } else if let JValue::String(s) = *self{
+
         }
+        todo!("user owned value not yet implemented")
     }
 
     pub fn to_float(self) -> f64{
@@ -200,8 +210,24 @@ impl JValue{
         }
     }
 
-    pub fn new(self) {
+    pub fn new(self, args:&[JValue]) -> Result<JValue, JValue>{
+        RUNTIME.with(|runtime|{
+            let (re, ok) = unsafe{
+                self.new_raw(
+                    &mut runtime.to_mut().context,
+                    args.as_ptr(), 
+                    args.len() as i64, false)
+            };
+            if ok{
+                return Ok(re)
+            } else{
+                return Err(re)
+            }
+        })
+    }
 
+    pub fn new_raw(self, vmctx:&mut VmContext, argv:*const JValue, argc:i64, spread:bool) -> (JValue, bool){
+        todo!()
     }
 
     pub fn call(self, this:JValue, args:&[JValue]) -> Result<JValue, JValue>{
@@ -224,9 +250,7 @@ impl JValue{
     
     pub(crate) unsafe fn call_raw(self, vmctx:&mut VmContext, this:JValue, argv:*const JValue, argc:i64, spread:bool) -> (JValue, bool){
         if let Some(o) = self.object(){
-            match &o.inner{
-                Some(b) => {
-
+            if let Some(f) = o.inner.function(){
                     let args = std::slice::from_raw_parts(argv, argc as usize);
 
                     // spread the last argument
@@ -235,19 +259,19 @@ impl JValue{
                         let mut v = args.to_vec();
                         v.extend(operator::IteratorCollect(args[args.len()-1]));
 
-                        let ctx = vmctx as *mut VmContext;
+                        let ctx = vmctx as *mut VmContext as usize;
 
                         catch_unwind(||{
                             let r = self;
-                            r.object().unwrap().inner_ref_uncheck().borrow_mut().call(ctx.as_mut().unwrap(), this, &v)
+                            r.object().unwrap().inner.call((ctx as *mut VmContext).as_mut().unwrap(), this, &v)
                         })
 
                     } else{
-                        let ctx = vmctx as *mut VmContext;
+                        let ctx = vmctx as *mut VmContext as usize;
                         
                         catch_unwind(||{
                             let r = self;
-                            r.object().unwrap().inner_ref_uncheck().borrow_mut().call(ctx.as_mut().unwrap(), this, args)
+                            r.object().unwrap().inner.call((ctx as *mut VmContext).as_mut().unwrap(), this, args)
                         })
                     };
 
@@ -261,9 +285,8 @@ impl JValue{
                             }
                         }
                     }
-                },
-                // todo: type Error
-                None => return (JValue::Undefined, false)
+            } else{
+                return (JValue::Undefined, false)
             }
         } else{
             // todo: type Error
@@ -418,7 +441,7 @@ impl JValue{
                 JValue::String(s1) => JValue::Boolean(s.as_ref() == s1.as_ref()),
                 _ => JValue::Boolean(false),
             },
-            v => unsafe{JValue::Boolean(std::mem::transmute::<_,i128>(v) == std::mem::transmute(rhs))}
+            v => unsafe{JValue::Boolean(std::mem::transmute::<_,i128>(v) == std::mem::transmute::<_, i128>(rhs))}
         }
     }
 
@@ -745,8 +768,8 @@ impl From<&'static mut JObject> for JValue{
     }
 }
 
-impl<F> From<F> for JValue where F:Fn(&mut VmContext, JValue, &[JValue]) -> JValue + 'static{
-    fn from(func: F) -> Self {
-        JObject::fromInner(builtins::function::Function::native(func)).into()
+impl From<i32> for JValue{
+    fn from(i: i32) -> Self {
+        JValue::Number(i as f64)
     }
 }
