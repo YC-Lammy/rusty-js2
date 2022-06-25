@@ -205,7 +205,7 @@ impl JValue{
             JValue::Boolean(b) => b,
             JValue::Number(n) => n!=0.0,
             JValue::Object(o) => true,
-            JValue::String(s) => unsafe{*s.0 != 0},
+            JValue::String(s) => unsafe{s.len() != 0},
             JValue::Symbol(s) => true,
         }
     }

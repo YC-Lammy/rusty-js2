@@ -392,7 +392,30 @@ impl<'a> BuilderContext<'a>{
             },
 
             Stmt::Decl(d) => {
-                todo!()
+                match d{
+                    Decl::Class(c) => {
+                        let class = self.translate_class(&c.class, Some(&c.ident.sym))?;
+                        self.translate_ident_decl(&c.ident, class)?;
+                    },
+                    Decl::Fn(f) => {
+                        let func = self.translate_func(&f.function, Some(&f.ident.sym))?;
+                    },
+                    Decl::TsEnum(e) => {
+                        todo!()
+                    },
+                    Decl::TsInterface(i) => {
+                        todo!()
+                    },
+                    Decl::TsModule(m) => {
+                        todo!()
+                    },
+                    Decl::TsTypeAlias(t) => {
+                        todo!()
+                    },
+                    Decl::Var(v) => {
+                        self.translate_var_decl(v)?;
+                    }
+                }
             },
 
             Stmt::DoWhile(d) => {
@@ -962,7 +985,12 @@ impl<'a> BuilderContext<'a>{
             },
 
             Expr::Class(c) => {
-                todo!()
+                let name = if let Some(i) = &c.ident{
+                    Some(i.sym.as_ref())
+                } else{
+                    None
+                };
+                self.translate_class(&c.class, name)
             },
 
             Expr::Cond(c) => {
@@ -976,7 +1004,12 @@ impl<'a> BuilderContext<'a>{
             },
 
             Expr::Fn(f) => {
-                todo!()
+                let name = if let Some(i) = &f.ident{
+                    Some(i.sym.as_ref())
+                } else{
+                    None
+                };
+                self.translate_func(&f.function, name)
             },
 
             Expr::Ident(i) => {
@@ -1209,6 +1242,14 @@ impl<'a> BuilderContext<'a>{
         }
     }
 
+    pub fn translate_func(&self, func:&Function, name:Option<&str>) -> Result<Value, Error>{
+        todo!()
+    }
+
+    pub fn translate_class(&self, class:&Class, name:Option<&str>) -> Result<Value, Error>{
+        todo!()
+    }
+
     pub fn translate_var_decl(&mut self, decl:&VarDecl) -> Result<(), Error>{
         for dec in &decl.decls{
             let val = if let Some(e) = &dec.init{
@@ -1234,11 +1275,7 @@ impl<'a> BuilderContext<'a>{
             },
             Pat::Expr(e) => todo!(),
             Pat::Ident(i) => {
-                let id = self.runtime.to_mut().new_variable_name(&i.id.sym);
-                let id_const = self.builder.ins().iconst(types::I64, id as i64);
-
-                let vmctx = self.builder.use_var(self.vmctx);
-                self.builder.ins().call(self.set_var, &[vmctx, id_const, val]);
+                self.translate_ident_decl(&i.id, val)?;
             },
             Pat::Invalid(i) => todo!(),
             Pat::Object(o) => {
@@ -1246,6 +1283,15 @@ impl<'a> BuilderContext<'a>{
             }
             Pat::Rest(r) => unimplemented!()
         }
+        Ok(())
+    }
+
+    pub fn translate_ident_decl(&mut self, ident:&Ident, val:Value) -> Result<(), Error>{
+        let id = self.runtime.to_mut().new_variable_name(&ident.sym);
+        let id_const = self.builder.ins().iconst(types::I64, id as i64);
+
+        let vmctx = self.builder.use_var(self.vmctx);
+        self.builder.ins().call(self.set_var, &[vmctx, id_const, val]);
         Ok(())
     }
 
